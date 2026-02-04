@@ -1,7 +1,22 @@
 version: '3.8'
 
 services:
-  # 1. The Database Service
+  # 1. Your FastAPI Backend
+  backend:
+    build: ./backend  # Looks for the Dockerfile in /backend folder
+    container_name: ai_analyst_backend
+    restart: always
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    environment:
+      # Notice we use 'db' (the service name) instead of 'localhost'
+      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/ai_analytics_db
+    volumes:
+      - ./backend/temp_uploads:/app/temp_uploads
+
+  # 2. The Database Service
   db:
     image: postgres:15-alpine
     container_name: ai_analyst_db
@@ -13,10 +28,9 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      # This ensures data persists even if you restart your computer
       - postgres_data:/var/lib/postgresql/data
 
-  # 2. The Database UI (pgAdmin)
+  # 3. The Database UI (Optional - disable in prod to save resources if needed)
   pgadmin:
     image: dpage/pgadmin4
     container_name: ai_analyst_pgadmin
