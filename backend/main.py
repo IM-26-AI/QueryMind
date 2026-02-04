@@ -1,6 +1,4 @@
 import os
-import hashlib
-import bcrypt
 from io import BytesIO
 import pandas as pd
 from fastapi import FastAPI, Depends, HTTPException, UploadFile, File
