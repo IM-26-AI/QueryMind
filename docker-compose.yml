@@ -12,7 +12,7 @@ services:
       - db
     environment:
       # Notice we use 'db' (the service name) instead of 'localhost'
-      - DATABASE_URL=postgresql://myuser:mypassword@db:5432/ai_analytics_db
+      - DATABASE_URL=${DATABASE_URL}
     volumes:
       - ./backend/temp_uploads:/app/temp_uploads
 
@@ -22,8 +22,8 @@ services:
     container_name: ai_analyst_db
     restart: always
     environment:
-      POSTGRES_USER: myuser
-      POSTGRES_PASSWORD: mypassword
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ai_analytics_db
     ports:
       - "5432:5432"
