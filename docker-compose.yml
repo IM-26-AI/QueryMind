@@ -22,6 +22,9 @@ services:
     environment:
       # Notice we use 'db' (the service name) instead of 'localhost'
       - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
     volumes:
       - ./backend/temp_uploads:/app/temp_uploads
 

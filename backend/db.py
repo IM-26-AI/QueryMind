@@ -1,13 +1,13 @@
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-import os
 from dotenv import load_dotenv
+from config import settings
 
 # Load variables from .env
 load_dotenv()
 
-SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+SQLALCHEMY_DATABASE_URL = settings.DATABASE_URL
 
 # Create the engine
 # check_same_thread is only needed for SQLite, not Postgres
