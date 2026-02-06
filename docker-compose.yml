@@ -1,0 +1,19 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: querymind_db
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: company_db
+    ports:
+      # Map container port 5432 to host port 5436 to avoid conflicts
+      - "5436:5432"
+    volumes:
+      # We ONLY keep the data volume, no SQL file mapping
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
