@@ -18,7 +18,7 @@ from db import engine, get_db
 # Setup DB
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI()
+app = FastAPI(docs_url="/", redoc_url=None)
 
 # Setup Uploads
 UPLOAD_DIR = "temp_uploads"
@@ -92,6 +92,30 @@ async def read_users_me(
         raise HTTPException(status_code=404, detail="User not found")
         
     return user
+
+@app.put("/update_user")
+async def update_user(
+   user : schemas.UserUpdate,
+   token: str = Depends(oauth2_scheme),
+   db : Session= Depends(get_db)
+):
+    
+    email = auth.get_current_user(token)
+    db_user = db.query(models.User).filter(models.User.email== email).first()
+    if db_user is None:
+        raise HTTPException(status_code=404,detail="User not found")
+    
+    
+    if user.password is not None:
+        # We MUST hash the new password before saving!
+        hashed_password = utils.get_password_hash(user.password)
+        db_user.hashed_password = hashed_password
+    
+    db.commit()
+    db.refresh(db_user)
+
+    return user
+
 
 @app.post("/upload_data")
 async def upload_data(

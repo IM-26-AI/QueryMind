@@ -25,6 +25,11 @@ class UserResponse(UserBase):
     id: int
     is_active: bool
 
-    # This is crucial for validting against SQLAlchemy models
-    class Config:
-        from_attributes = True
+class UserUpdate(BaseModel):
+    full_name: str | None = None
+    email: str | None = None
+    password: str | None = None  # Optional: Only send if changing it
+
+# This is crucial for validting against SQLAlchemy models
+class Config:
+    from_attributes = True
