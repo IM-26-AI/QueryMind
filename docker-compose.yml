@@ -28,6 +28,22 @@ services:
     volumes:
       - ./backend/temp_uploads:/app/temp_uploads
 
+  frontend:
+    build: ./frontend
+    container_name: ai_analyst_frontend
+    restart: always
+    depends_on:
+      - backend
+    # Map the folder so changes reflect instantly
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules # PREVENT local node_modules from overriding container
+    environment:
+      # Pass the backend URL to the frontend
+      - VITE_API_URL=http://localhost/api
+    expose:
+      - "5173"    
+
   # 2. The Database Service
   db:
     image: postgres:15-alpine
