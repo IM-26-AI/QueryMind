@@ -133,4 +133,4 @@ async def upload_schema(
     db.commit()
     db.refresh(new_source)
 
-    return {"msg": "Schema uploaded successfully", "id": new_source.id}
+    return {"msg": "Schema uploaded successfully", "id": new_source.id, "schema":clean_schema}

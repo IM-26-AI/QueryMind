@@ -41,7 +41,7 @@ const Dashboard = () => {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       // The backend returns { msg: "...", id: ... } so we use res.data.msg
-      setMessage(`✅ Success: ${res.data.msg}`);
+      setMessage(`✅ Success: ${res.data.msg} Data Source Id: ${res.data.id}`);
       setFile(null); // Clear file after success
     } catch (err) {
       setMessage('❌ Upload failed. Please try again.');
