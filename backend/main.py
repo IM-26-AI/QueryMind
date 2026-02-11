@@ -19,7 +19,7 @@ import services
 # Setup DB
 models.Base.metadata.create_all(bind=engine)
 
-app = FastAPI(docs_url="/", redoc_url=None)
+app = FastAPI(docs_url="/",root_path="/api", redoc_url=None)
 
 # Setup Uploads
 UPLOAD_DIR = "temp_uploads"
