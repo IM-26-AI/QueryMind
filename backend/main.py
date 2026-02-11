@@ -14,6 +14,7 @@ import schemas  # Your Pydantic Models
 import auth     # Your JWT Logic
 import utils    # Your Password Hashing
 from db import engine, get_db
+import services
 
 # Setup DB
 models.Base.metadata.create_all(bind=engine)
@@ -80,64 +81,56 @@ def create_user(user: schemas.UserCreate, db: Session = Depends(get_db)):
 
 @app.get("/users/me", response_model=schemas.UserResponse)
 async def read_users_me(
-    token: str = Depends(oauth2_scheme), 
-    db: Session = Depends(get_db)
+    current_user: models.User = Depends(auth.get_current_user)
 ):
-    email = auth.get_current_user(token)
-    if email is None:
-        raise HTTPException(status_code=401, detail="Invalid credentials")
+    return current_user
 
-    user = db.query(models.User).filter(models.User.email == email).first()
-    if user is None:
-        raise HTTPException(status_code=404, detail="User not found")
-        
-    return user
-
-@app.put("/update_user")
+@app.put("/update_user", response_model=schemas.UserResponse)
 async def update_user(
-   user : schemas.UserUpdate,
-   token: str = Depends(oauth2_scheme),
-   db : Session= Depends(get_db)
+   user_update: schemas.UserUpdate, # Renamed to avoid confusion
+   db: Session = Depends(get_db),
+   current_user: models.User = Depends(auth.get_current_user)
 ):
+    if user_update.password is not None:
+        current_user.hashed_password = utils.get_password_hash(user_update.password)
     
-    email = auth.get_current_user(token)
-    db_user = db.query(models.User).filter(models.User.email== email).first()
-    if db_user is None:
-        raise HTTPException(status_code=404,detail="User not found")
-    
-    
-    if user.password is not None:
-        # We MUST hash the new password before saving!
-        hashed_password = utils.get_password_hash(user.password)
-        db_user.hashed_password = hashed_password
-    
+    if user_update.full_name is not None:
+        current_user.full_name = user_update.full_name
+        
     db.commit()
-    db.refresh(db_user)
+    db.refresh(current_user)
 
-    return user
+    return current_user
 
 
-@app.post("/upload_data")
-async def upload_data(
-    file: UploadFile = File(...), 
-    token: str = Depends(oauth2_scheme)
+@app.post("/upload-schema")
+async def upload_schema(
+    file: UploadFile = File(...),
+    db: Session = Depends(get_db),
+    current_user: models.User = Depends(auth.get_current_user)
 ):
-    auth.get_current_user(token) # Just verify token is valid
+    # 1. Validate file type
+    if not file.filename.endswith('.sql'):
+        raise HTTPException(status_code=400, detail="Only .sql files are allowed")
+
+    # 2. Read file content
+    content = await file.read()
+    content_str = content.decode('utf-8')
+
+    # 3. Parse using your service
+    clean_schema = services.parse_sql_file(content_str)
     
-    filename = file.filename
-    if filename.endswith(".csv"):
-        contents = await file.read()
-        df = pd.read_csv(BytesIO(contents))
-        table_name = filename.split(".")[0].lower()
-        df.to_sql(table_name, engine, if_exists='replace', index=False)
-        return {"message": f"Table '{table_name}' created", "rows": len(df)}
-        
-    elif filename.endswith(".sql"):
-        contents = await file.read()
-        with engine.connect() as connection:
-            connection.execute(text(contents.decode("utf-8")))
-            connection.commit()
-        return {"message": "SQL script executed"}
-        
-    else:
-        raise HTTPException(status_code=400, detail="Invalid file type")
+    if not clean_schema:
+        raise HTTPException(status_code=400, detail="No CREATE TABLE statements found.")
+
+    # 4. Save to Database
+    new_source = models.DataSource(
+        user_id=current_user.id,  # <--- This works now!
+        filename=file.filename,
+        schema_context=clean_schema
+    )
+    db.add(new_source)
+    db.commit()
+    db.refresh(new_source)
+
+    return {"msg": "Schema uploaded successfully", "id": new_source.id}
