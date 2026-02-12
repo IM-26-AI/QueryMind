@@ -1,77 +1,19 @@
 version: '3.8'
 
 services:
-
-  nginx:
-    image: nginx:alpine
-    container_name: ai_analyst_nginx
-    restart: always
-    ports:
-      - ${NGINX_DOCKER_PORT}  # Expose standard HTTP port
-    volumes:
-      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
-    depends_on:
-      - backend
-  # 1. Your FastAPI Backend
-  backend:
-    build: ./backend  # Looks for the Dockerfile in /backend folder
-    container_name: ai_analyst_backend
-    restart: always
-    depends_on:
-      - db
-    environment:
-      # Notice we use 'db' (the service name) instead of 'localhost'
-      - DATABASE_URL=${DATABASE_URL}
-      - SECRET_KEY=${SECRET_KEY}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-    volumes:
-      - ./backend/temp_uploads:/app/temp_uploads
-
-  frontend:
-    build: ./frontend
-    container_name: ai_analyst_frontend
-    restart: always
-    depends_on:
-      - backend
-    # Map the folder so changes reflect instantly
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules # PREVENT local node_modules from overriding container
-    environment:
-      # Pass the backend URL to the frontend
-      - VITE_API_URL=http://localhost/api
-    expose:
-      - "5173"    
-
-  # 2. The Database Service
   db:
     image: postgres:15-alpine
-    container_name: ai_analyst_db
-    restart: always
+    container_name: querymind_db
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
-      POSTGRES_DB: ai_analytics_db
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: company_db
     ports:
-      - "5432:5432"
+      # Map container port 5432 to host port 5436 to avoid conflicts
+      - "5436:5432"
     volumes:
+      # We ONLY keep the data volume, no SQL file mapping
       - postgres_data:/var/lib/postgresql/data
-
-  # 3. The Database UI (Optional - disable in prod to save resources if needed)
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: ai_analyst_pgadmin
-    restart: always
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    #ports:
-    #  - "5050:80"
-    expose:
-      - 80
-    depends_on:
-      - db
 
 volumes:
   postgres_data:
