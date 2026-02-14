@@ -11,6 +11,11 @@ const Dashboard = () => {
   const [user, setUser] = useState<User | null>(null);
   const [file, setFile] = useState<File | null>(null);
   const [message, setMessage] = useState('');
+  const [question, setQuestion] = useState('');
+  const [querying, setQuerying] = useState(false);
+  const [querySql, setQuerySql] = useState<string | null>(null);
+  const [queryResults, setQueryResults] = useState<any[] | null>(null);
+  const [querySummary, setQuerySummary] = useState<string | null>(null);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -31,13 +36,31 @@ const Dashboard = () => {
     const formData = new FormData();
     formData.append('file', file);
 
-    try {
-      const res = await api.post('/upload_data', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
+      try {
+      const res = await api.post('/upload_data', formData);
       setMessage(`Success: ${res.data.message}`);
     } catch (err) {
       setMessage('Upload failed');
+    }
+  };
+
+  const handleQuery = async () => {
+    if (!question.trim()) return;
+    setQuerying(true);
+    setQuerySql(null);
+    setQueryResults(null);
+    setQuerySummary(null);
+
+    try {
+      const res = await api.post('/query', { question });
+      const data = res.data;
+      setQuerySql(data.sql_query || null);
+      setQueryResults(Array.isArray(data.results) ? data.results : []);
+      setQuerySummary(data.summary || null);
+    } catch (err: any) {
+      setMessage('Query failed.');
+    } finally {
+      setQuerying(false);
     }
   };
 
@@ -70,6 +93,65 @@ const Dashboard = () => {
         <div style={{ marginBottom: '2rem' }}>
           <h3 style={{ margin: 0, color: '#555' }}>Welcome, {user.full_name}</h3>
           <p style={{ color: '#777', marginTop: '5px' }}>{user.email}</p>
+        </div>
+
+        {/* Query Section */}
+        <div style={{ marginTop: '1.5rem', background: '#fff7e6', padding: '20px', borderRadius: '8px', border: '1px solid #ffe8a1' }}>
+          <h4 style={{ marginTop: 0 }}>💬 Ask a Question</h4>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="E.g. Which product category has the highest inventory value?"
+            style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+          />
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <button onClick={handleQuery} disabled={querying} style={{ padding: '10px 20px', background: '#0d6efd', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+              {querying ? 'Querying...' : 'Run Query'}
+            </button>
+            <button onClick={() => { setQuestion(''); setQuerySql(null); setQueryResults(null); setQuerySummary(null); }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+              Clear
+            </button>
+          </div>
+
+          {querySummary && (
+            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#eef9ff', border: '1px solid #d1ecf1' }}>
+              <strong>Summary:</strong>
+              <p style={{ margin: '8px 0' }}>{querySummary}</p>
+            </div>
+          )}
+
+          {querySql && (
+            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#f8f9fa', border: '1px solid #e9ecef' }}>
+              <strong>Generated SQL</strong>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: '8px' }}>{querySql}</pre>
+            </div>
+          )}
+
+          {queryResults && queryResults.length > 0 && (
+            <div style={{ marginTop: '15px' }}>
+              <strong>Results</strong>
+              <div style={{ overflowX: 'auto', marginTop: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {Object.keys(queryResults[0]).map((k) => (
+                        <th key={k} style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #eee' }}>{k}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queryResults.map((row, idx) => (
+                      <tr key={idx}>
+                        {Object.values(row).map((val, i) => (
+                          <td key={i} style={{ padding: '8px', borderBottom: '1px solid #f1f1f1' }}>{String(val)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Upload Section */}

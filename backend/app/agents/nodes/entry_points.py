@@ -4,6 +4,7 @@ from langchain_core.messages import SystemMessage, HumanMessage
 from app.services.rag import VectorService
 import sqlglot
 from sqlglot import exp
+import os
 from app.services.database import execute_query
 
 # Initialize LLM and RAG
@@ -90,7 +91,9 @@ def executor_node(state: AgentState):
     sql_query = state['sql_query']
     
     # Run the query
-    result = execute_query(sql_query)
+    # If an AGENT_DATABASE_URL is provided, execute there; otherwise default DATABASE_URL is used
+    agent_db_url = os.getenv("AGENT_DATABASE_URL")
+    result = execute_query(sql_query, db_url=agent_db_url)
     
     # Save the data to the state
     return {"query_result": result}

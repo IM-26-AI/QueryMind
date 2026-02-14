@@ -16,7 +16,7 @@ import models   # Your DB Tables
 import schemas  # Your Pydantic Models
 import auth     # Your JWT Logic
 import utils    # Your Password Hashing
-from db import engine, get_db
+from db import engine, get_db, SessionLocal
 import services
 
 # --- AGENT IMPORTS ---
@@ -33,6 +33,153 @@ except ImportError:
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(docs_url="/",root_path="/api", redoc_url=None)
+
+
+@app.on_event("startup")
+def ensure_test_user():
+    """
+    Ensure a permanent test user exists so developers can log in after container restarts.
+    """
+    import os
+    try:
+        # Read credentials from environment to avoid hardcoding secrets in repo
+        test_username = os.getenv('DEV_TEST_USERNAME')
+        test_password = os.getenv('DEV_TEST_PASSWORD')
+        test_fullname = os.getenv('DEV_TEST_FULLNAME', 'Dev Test User')
+        test_email = os.getenv('DEV_TEST_EMAIL', test_username)
+
+        # If no username/password provided, do nothing (safer for public repos)
+        if not test_username or not test_password:
+            print('DEV_TEST_USERNAME or DEV_TEST_PASSWORD not set; skipping test user creation')
+            return
+
+        db = SessionLocal()
+        # Check if the test user exists
+        existing = db.query(models.User).filter(models.User.email == test_email).first()
+        if existing:
+            db.close()
+            return
+
+        # Create the test user with a hashed password using utils
+        hashed = utils.get_password_hash(test_password)
+
+        test_user = models.User(
+            email=test_email,
+            hashed_password=hashed,
+            full_name=test_fullname,
+            is_active=True
+        )
+        db.add(test_user)
+        db.commit()
+        db.close()
+        print(f'Created permanent test user: {test_email}')
+    except Exception as e:
+        try:
+            db.close()
+        except Exception:
+            pass
+        print(f"Failed to ensure test user: {e}")
+
+
+@app.on_event("startup")
+def ensure_demo_db_seeded():
+    """
+    Ensure the AGENT database exists and is seeded with sample data if a seed file is available.
+    This is idempotent and safe to run on startup in development environments.
+    """
+    import os
+    from urllib.parse import urlparse
+    try:
+        agent_db_url = os.getenv('AGENT_DATABASE_URL')
+        if not agent_db_url:
+            print('AGENT_DATABASE_URL not set; skipping demo DB seeding')
+            return
+
+        # Parse the target database name
+        parsed = urlparse(agent_db_url)
+        target_db = parsed.path.lstrip('/')
+        if not target_db:
+            print('Could not determine target DB name from AGENT_DATABASE_URL')
+            return
+
+        # Connect to the main configured DB (used for admin operations)
+        from app.services.database import get_db_connection
+        admin_url = os.getenv('DATABASE_URL')
+        admin_conn = get_db_connection(admin_url)
+        if not admin_conn:
+            print('Failed to connect to admin DATABASE_URL; skipping demo DB creation')
+            return
+
+        cur = admin_conn.cursor()
+        cur.execute("SELECT 1 FROM pg_database WHERE datname=%s", (target_db,))
+        exists = cur.fetchone()
+        if not exists:
+            try:
+                # Close the previous cursor and set autocommit/isolation before CREATE DATABASE
+                cur.close()
+                try:
+                    import psycopg2
+                    from psycopg2 import extensions
+                    admin_conn.set_isolation_level(extensions.ISOLATION_LEVEL_AUTOCOMMIT)
+                except Exception:
+                    try:
+                        admin_conn.autocommit = True
+                    except Exception:
+                        pass
+
+                cur = admin_conn.cursor()
+                cur.execute(f"CREATE DATABASE {target_db};")
+                print(f'Created database {target_db}')
+            except Exception as e:
+                print(f'Failed to create database {target_db}: {e}')
+            finally:
+                try:
+                    cur.close()
+                except Exception:
+                    pass
+                try:
+                    admin_conn.set_isolation_level(extensions.ISOLATION_LEVEL_READ_COMMITTED)
+                except Exception:
+                    try:
+                        admin_conn.autocommit = False
+                    except Exception:
+                        pass
+        else:
+            cur.close()
+        admin_conn.close()
+
+        # Now seed the target DB if a seed file exists
+        seed_path = os.path.join(os.getcwd(), 'database', 'docker-init', '02_sample_complex_seed.sql')
+        if not os.path.exists(seed_path):
+            print(f'Seed file not found at {seed_path}; skipping seeding')
+            return
+
+        # Read SQL and execute statements sequentially
+        with open(seed_path, 'r', encoding='utf-8') as f:
+            sql = f.read()
+
+        # Split on semicolons to run statements one by one (simple but adequate for our seed)
+        statements = [s.strip() for s in sql.split(';') if s.strip()]
+
+        target_conn = get_db_connection(agent_db_url)
+        if not target_conn:
+            print(f'Failed to connect to target DB {agent_db_url}; skipping seeding')
+            return
+
+        tcur = target_conn.cursor()
+        for stmt in statements:
+            try:
+                tcur.execute(stmt)
+            except Exception as e:
+                # Log and continue
+                print(f'Error executing statement during seeding: {e}')
+        target_conn.commit()
+        tcur.close()
+        target_conn.close()
+        print(f'Seeded demo DB: {target_db} (statements executed: {len(statements)})')
+
+    except Exception as e:
+        print(f'Unexpected error during demo DB seeding: {e}')
 
 # --- CORS Configuration ---
 app.add_middleware(
@@ -166,6 +313,25 @@ async def upload_schema(
     db.commit()
     db.refresh(new_source)
 
+    # If agent services (RAG) are available, index each table DDL into the vector DB
+    if AGENT_AVAILABLE:
+        try:
+            # services.parse_sql_blocks returns list of DDL blocks
+            ddl_blocks = services.parse_sql_blocks(content_str)
+            if ddl_blocks:
+                rag = VectorService()
+                import re
+                for ddl in ddl_blocks:
+                    m = re.search(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?([A-Za-z0-9_]+)[`\"]?', ddl, flags=re.IGNORECASE)
+                    table_name = m.group(1) if m else f"table_{hash(ddl) % 100000}"
+                    try:
+                        rag.add_table_context(table_name=table_name, ddl=ddl, description=f"Uploaded by {current_user.email}")
+                    except Exception:
+                        # Non-fatal: continue indexing other tables
+                        pass
+        except Exception:
+            pass
+
     return {"msg": "Schema uploaded successfully", "id": new_source.id}
 
 
@@ -296,6 +462,23 @@ async def upload_data(
         db.add(new_source)
         db.commit()
         db.refresh(new_source)
+
+        # If agent services available, index SQL DDL blocks into Chroma for RAG
+        if file_ext == '.sql' and AGENT_AVAILABLE:
+            try:
+                ddl_blocks = services.parse_sql_blocks(content_str)
+                if ddl_blocks:
+                    rag = VectorService()
+                    import re
+                    for ddl in ddl_blocks:
+                        m = re.search(r'CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?[`\"]?([A-Za-z0-9_]+)[`\"]?', ddl, flags=re.IGNORECASE)
+                        table_name = m.group(1) if m else f"table_{hash(ddl) % 100000}"
+                        try:
+                            rag.add_table_context(table_name=table_name, ddl=ddl, description=f"Uploaded by {current_user.email}")
+                        except Exception:
+                            pass
+            except Exception:
+                pass
         
         return {
             "message": f"File {file.filename} uploaded successfully",

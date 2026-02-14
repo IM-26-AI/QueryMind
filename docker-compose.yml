@@ -1,19 +1,87 @@
 version: '3.8'
 
 services:
+  nginx:
+    image: nginx:alpine
+    container_name: querymind_nginx
+    restart: always
+    ports:
+      - ${NGINX_DOCKER_PORT}
+    volumes:
+      - ./nginx/default.conf.template:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: dockerfile
+    container_name: querymind_backend
+    restart: always
+    depends_on:
+      - db
+    env_file:
+      - ./.env
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - SECRET_KEY=${SECRET_KEY}
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+    volumes:
+      - ./backend/temp_uploads:/app/temp_uploads
+      - ./chroma_db:/app/chroma_db
+      - ./database:/app/database:ro
+    expose:
+      - "8000"
+    command: uvicorn main:app --host 0.0.0.0 --port 8000
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: dockerfile
+    container_name: querymind_frontend
+    restart: always
+    depends_on:
+      - backend
+    env_file:
+      - ./.env
+    environment:
+      - VITE_API_URL=http://localhost/api
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    expose:
+      - "5173"
+
   db:
     image: postgres:15-alpine
     container_name: querymind_db
+    restart: always
+    env_file:
+      - ./.env
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: password123
-      POSTGRES_DB: company_db
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ai_analytics_db
     ports:
-      # Map container port 5432 to host port 5436 to avoid conflicts
-      - "5436:5432"
+      - "5432:5432"
     volumes:
-      # We ONLY keep the data volume, no SQL file mapping
       - postgres_data:/var/lib/postgresql/data
+      - ./database/docker-init:/docker-entrypoint-initdb.d:ro
+
+
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: querymind_pgadmin
+    restart: always
+    env_file:
+      - ./.env
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
 
 volumes:
   postgres_data:

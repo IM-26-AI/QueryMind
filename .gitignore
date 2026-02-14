@@ -20,6 +20,7 @@ wheels/
 .installed.cfg
 *.egg
 MANIFEST
+backend/temp_uploads/
 
 # --- Virtual Environments ---
 venv/
@@ -53,3 +54,8 @@ docker-compose.override.yml
 
 # --- Logs ---
 *.log
+
+# --- Runbook Files ---
+RUNBOOK.md
+GEMINI.md
+scripts/
