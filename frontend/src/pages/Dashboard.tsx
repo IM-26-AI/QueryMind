@@ -1,0 +1,187 @@
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import api from '../api';
+
+interface User {
+  email: string;
+  full_name: string;
+}
+
+const Dashboard = () => {
+  const [user, setUser] = useState<User | null>(null);
+  const [file, setFile] = useState<File | null>(null);
+  const [message, setMessage] = useState('');
+  const [question, setQuestion] = useState('');
+  const [querying, setQuerying] = useState(false);
+  const [querySql, setQuerySql] = useState<string | null>(null);
+  const [queryResults, setQueryResults] = useState<any[] | null>(null);
+  const [querySummary, setQuerySummary] = useState<string | null>(null);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const fetchUser = async () => {
+      try {
+        const res = await api.get('/users/me');
+        setUser(res.data);
+      } catch (err) {
+        localStorage.removeItem('token');
+        navigate('/');
+      }
+    };
+    fetchUser();
+  }, [navigate]);
+
+  const handleUpload = async () => {
+    if (!file) return;
+    const formData = new FormData();
+    formData.append('file', file);
+
+      try {
+      const res = await api.post('/upload_data', formData);
+      setMessage(`Success: ${res.data.message}`);
+    } catch (err) {
+      setMessage('Upload failed');
+    }
+  };
+
+  const handleQuery = async () => {
+    if (!question.trim()) return;
+    setQuerying(true);
+    setQuerySql(null);
+    setQueryResults(null);
+    setQuerySummary(null);
+
+    try {
+      const res = await api.post('/query', { question });
+      const data = res.data;
+      setQuerySql(data.sql_query || null);
+      setQueryResults(Array.isArray(data.results) ? data.results : []);
+      setQuerySummary(data.summary || null);
+    } catch (err: any) {
+      setMessage('Query failed.');
+    } finally {
+      setQuerying(false);
+    }
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    navigate('/');
+  };
+
+  if (!user) return <div style={{textAlign: 'center', marginTop: '50px'}}>Loading...</div>;
+
+  return (
+    // 1. Main Background
+    <div style={{ minHeight: '100vh', background: '#f8f9fa', padding: '2rem' }}>
+      
+      {/* 2. Centered Container */}
+      <div style={{ maxWidth: '1000px', margin: '0 auto', background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
+        
+        {/* Header */}
+        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
+          <h1 style={{ margin: 0, color: '#333' }}>📊 Dashboard</h1>
+          <button 
+            onClick={handleLogout} 
+            style={{ background: '#dc3545', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+          >
+            Logout
+          </button>
+        </header>
+
+        {/* User Info */}
+        <div style={{ marginBottom: '2rem' }}>
+          <h3 style={{ margin: 0, color: '#555' }}>Welcome, {user.full_name}</h3>
+          <p style={{ color: '#777', marginTop: '5px' }}>{user.email}</p>
+        </div>
+
+        {/* Query Section */}
+        <div style={{ marginTop: '1.5rem', background: '#fff7e6', padding: '20px', borderRadius: '8px', border: '1px solid #ffe8a1' }}>
+          <h4 style={{ marginTop: 0 }}>💬 Ask a Question</h4>
+          <textarea
+            value={question}
+            onChange={(e) => setQuestion(e.target.value)}
+            placeholder="E.g. Which product category has the highest inventory value?"
+            style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
+          />
+          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+            <button onClick={handleQuery} disabled={querying} style={{ padding: '10px 20px', background: '#0d6efd', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+              {querying ? 'Querying...' : 'Run Query'}
+            </button>
+            <button onClick={() => { setQuestion(''); setQuerySql(null); setQueryResults(null); setQuerySummary(null); }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
+              Clear
+            </button>
+          </div>
+
+          {querySummary && (
+            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#eef9ff', border: '1px solid #d1ecf1' }}>
+              <strong>Summary:</strong>
+              <p style={{ margin: '8px 0' }}>{querySummary}</p>
+            </div>
+          )}
+
+          {querySql && (
+            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#f8f9fa', border: '1px solid #e9ecef' }}>
+              <strong>Generated SQL</strong>
+              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: '8px' }}>{querySql}</pre>
+            </div>
+          )}
+
+          {queryResults && queryResults.length > 0 && (
+            <div style={{ marginTop: '15px' }}>
+              <strong>Results</strong>
+              <div style={{ overflowX: 'auto', marginTop: '8px' }}>
+                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+                  <thead>
+                    <tr>
+                      {Object.keys(queryResults[0]).map((k) => (
+                        <th key={k} style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #eee' }}>{k}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {queryResults.map((row, idx) => (
+                      <tr key={idx}>
+                        {Object.values(row).map((val, i) => (
+                          <td key={i} style={{ padding: '8px', borderBottom: '1px solid #f1f1f1' }}>{String(val)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Upload Section */}
+        <div style={{ background: '#f1f3f5', padding: '20px', borderRadius: '8px', border: '1px dashed #ced4da' }}>
+          <h4 style={{ marginTop: 0 }}>📂 Upload Data</h4>
+          
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            <input 
+              type="file" 
+              onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} 
+              style={{ padding: '10px', background: 'white', borderRadius: '4px', border: '1px solid #ddd' }}
+            />
+            <button 
+              onClick={handleUpload} 
+              style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
+            >
+              Upload File
+            </button>
+          </div>
+
+          {message && (
+            <div style={{ marginTop: '15px', padding: '10px', borderRadius: '4px', background: message.includes('Success') ? '#d4edda' : '#f8d7da', color: message.includes('Success') ? '#155724' : '#721c24' }}>
+              {message}
+            </div>
+          )}
+        </div>
+
+      </div>
+    </div>
+  );
+};
+
+export default Dashboard;
