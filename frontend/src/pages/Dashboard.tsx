@@ -37,10 +37,10 @@ const Dashboard = () => {
     formData.append('file', file);
 
       try {
-      const res = await api.post('/upload_data', formData);
-      setMessage(`Success: ${res.data.message}`);
+      const res = await api.post('/upload-schema', formData); // Updated endpoint to match backend
+      setMessage(`✅ Success: ${res.data.msg || 'File uploaded'}`);
     } catch (err) {
-      setMessage('Upload failed');
+      setMessage('❌ Upload failed. Please check the file.');
     }
   };
 
@@ -58,7 +58,7 @@ const Dashboard = () => {
       setQueryResults(Array.isArray(data.results) ? data.results : []);
       setQuerySummary(data.summary || null);
     } catch (err: any) {
-      setMessage('Query failed.');
+      setMessage('❌ Query failed. Please try again.');
     } finally {
       setQuerying(false);
     }
@@ -69,119 +69,384 @@ const Dashboard = () => {
     navigate('/');
   };
 
-  if (!user) return <div style={{textAlign: 'center', marginTop: '50px'}}>Loading...</div>;
+  if (!user) return <div style={styles.loading}>Loading interface...</div>;
 
   return (
-    // 1. Main Background
-    <div style={{ minHeight: '100vh', background: '#f8f9fa', padding: '2rem' }}>
+    <div style={styles.pageContainer}>
       
-      {/* 2. Centered Container */}
-      <div style={{ maxWidth: '1000px', margin: '0 auto', background: 'white', padding: '2rem', borderRadius: '12px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}>
-        
-        {/* Header */}
-        <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '2rem', borderBottom: '1px solid #eee', paddingBottom: '1rem' }}>
-          <h1 style={{ margin: 0, color: '#333' }}>📊 Dashboard</h1>
-          <button 
-            onClick={handleLogout} 
-            style={{ background: '#dc3545', color: 'white', border: 'none', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-          >
-            Logout
-          </button>
-        </header>
+      {/* --- Top Navigation --- */}
+      <nav style={styles.navbar}>
+        <div style={styles.navLogo}>
+           <span style={styles.logoIcon}>✨</span> QueryMind
+        </div>
+        <div style={styles.navUser}>
+           <span style={styles.userName}>{user.full_name}</span>
+           <button onClick={handleLogout} style={styles.logoutBtn}>Sign Out</button>
+        </div>
+      </nav>
 
-        {/* User Info */}
-        <div style={{ marginBottom: '2rem' }}>
-          <h3 style={{ margin: 0, color: '#555' }}>Welcome, {user.full_name}</h3>
-          <p style={{ color: '#777', marginTop: '5px' }}>{user.email}</p>
+      <div style={styles.mainContent}>
+        
+        {/* --- Section 1: The AI Analyst (Hero) --- */}
+        <div style={styles.heroSection}>
+          <h2 style={styles.heroTitle}>Ask your Data</h2>
+          <p style={styles.heroSubtitle}>Generate SQL and insights instantly using natural language.</p>
+          
+          <div style={styles.queryBox}>
+            <textarea
+              value={question}
+              onChange={(e) => setQuestion(e.target.value)}
+              placeholder="e.g., Show me the top 5 customers by total revenue in 2024..."
+              style={styles.queryInput}
+            />
+            <div style={styles.queryActions}>
+              <button 
+                onClick={handleQuery} 
+                disabled={querying} 
+                style={querying ? styles.runBtnDisabled : styles.runBtn}
+              >
+                {querying ? 'Analyzing...' : '✨ Generate SQL & Run'}
+              </button>
+              <button 
+                onClick={() => { setQuestion(''); setQuerySql(null); setQueryResults(null); setQuerySummary(null); }} 
+                style={styles.clearBtn}
+              >
+                Clear
+              </button>
+            </div>
+          </div>
         </div>
 
-        {/* Query Section */}
-        <div style={{ marginTop: '1.5rem', background: '#fff7e6', padding: '20px', borderRadius: '8px', border: '1px solid #ffe8a1' }}>
-          <h4 style={{ marginTop: 0 }}>💬 Ask a Question</h4>
-          <textarea
-            value={question}
-            onChange={(e) => setQuestion(e.target.value)}
-            placeholder="E.g. Which product category has the highest inventory value?"
-            style={{ width: '100%', minHeight: '80px', padding: '10px', borderRadius: '6px', border: '1px solid #ddd' }}
-          />
-          <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
-            <button onClick={handleQuery} disabled={querying} style={{ padding: '10px 20px', background: '#0d6efd', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              {querying ? 'Querying...' : 'Run Query'}
-            </button>
-            <button onClick={() => { setQuestion(''); setQuerySql(null); setQueryResults(null); setQuerySummary(null); }} style={{ padding: '10px 20px', background: '#6c757d', color: 'white', border: 'none', borderRadius: '6px', cursor: 'pointer' }}>
-              Clear
-            </button>
-          </div>
+        {/* --- Section 2: Results Display --- */}
+        {(querySummary || querySql || queryResults) && (
+          <div style={styles.resultsContainer}>
+            
+            {/* 2A. Summary Box */}
+            {querySummary && (
+              <div style={styles.summaryCard}>
+                <div style={styles.cardHeader}>💡 AI Insight</div>
+                <div style={styles.summaryText}>{querySummary}</div>
+              </div>
+            )}
 
-          {querySummary && (
-            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#eef9ff', border: '1px solid #d1ecf1' }}>
-              <strong>Summary:</strong>
-              <p style={{ margin: '8px 0' }}>{querySummary}</p>
-            </div>
-          )}
+            {/* 2B. SQL Code Block (Dark Mode style) */}
+            {querySql && (
+              <div style={styles.codeCard}>
+                <div style={styles.cardHeaderCode}>
+                  <span>SQL Query</span>
+                  <span style={styles.langTag}>POSTGRESQL</span>
+                </div>
+                <pre style={styles.codeBlock}>{querySql}</pre>
+              </div>
+            )}
 
-          {querySql && (
-            <div style={{ marginTop: '15px', padding: '12px', borderRadius: '6px', background: '#f8f9fa', border: '1px solid #e9ecef' }}>
-              <strong>Generated SQL</strong>
-              <pre style={{ whiteSpace: 'pre-wrap', wordBreak: 'break-word', marginTop: '8px' }}>{querySql}</pre>
-            </div>
-          )}
-
-          {queryResults && queryResults.length > 0 && (
-            <div style={{ marginTop: '15px' }}>
-              <strong>Results</strong>
-              <div style={{ overflowX: 'auto', marginTop: '8px' }}>
-                <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-                  <thead>
-                    <tr>
-                      {Object.keys(queryResults[0]).map((k) => (
-                        <th key={k} style={{ textAlign: 'left', padding: '8px', borderBottom: '1px solid #eee' }}>{k}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {queryResults.map((row, idx) => (
-                      <tr key={idx}>
-                        {Object.values(row).map((val, i) => (
-                          <td key={i} style={{ padding: '8px', borderBottom: '1px solid #f1f1f1' }}>{String(val)}</td>
+            {/* 2C. Data Table */}
+            {queryResults && queryResults.length > 0 && (
+              <div style={styles.tableCard}>
+                <div style={styles.cardHeader}>📊 Query Results</div>
+                <div style={styles.tableWrapper}>
+                  <table style={styles.table}>
+                    <thead>
+                      <tr>
+                        {Object.keys(queryResults[0]).map((k) => (
+                          <th key={k} style={styles.th}>{k}</th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {queryResults.map((row, idx) => (
+                        <tr key={idx} style={idx % 2 === 0 ? styles.trEven : styles.trOdd}>
+                          {Object.values(row).map((val, i) => (
+                            <td key={i} style={styles.td}>{String(val)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
-            </div>
-          )}
-        </div>
-
-        {/* Upload Section */}
-        <div style={{ background: '#f1f3f5', padding: '20px', borderRadius: '8px', border: '1px dashed #ced4da' }}>
-          <h4 style={{ marginTop: 0 }}>📂 Upload Data</h4>
-          
-          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
-            <input 
-              type="file" 
-              onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} 
-              style={{ padding: '10px', background: 'white', borderRadius: '4px', border: '1px solid #ddd' }}
-            />
-            <button 
-              onClick={handleUpload} 
-              style={{ padding: '10px 20px', background: '#28a745', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold' }}
-            >
-              Upload File
-            </button>
+            )}
           </div>
+        )}
 
-          {message && (
-            <div style={{ marginTop: '15px', padding: '10px', borderRadius: '4px', background: message.includes('Success') ? '#d4edda' : '#f8d7da', color: message.includes('Success') ? '#155724' : '#721c24' }}>
-              {message}
+        {/* --- Section 3: Upload Utility (Bottom) --- */}
+        <div style={styles.uploadSection}>
+          <div style={styles.uploadCard}>
+            <div style={styles.uploadHeader}>
+              <h4 style={{margin:0}}>📂 Data Source</h4>
+              <p style={{margin:'5px 0 0', fontSize:'0.85rem', color:'#666'}}>Update your database schema context.</p>
             </div>
-          )}
+            
+            <div style={styles.uploadControls}>
+              <label style={styles.fileLabel}>
+                <input 
+                  type="file" 
+                  accept=".sql"
+                  onChange={(e) => setFile(e.target.files ? e.target.files[0] : null)} 
+                  style={{display: 'none'}}
+                />
+                {file ? `📄 ${file.name}` : 'Select SQL File'}
+              </label>
+
+              <button onClick={handleUpload} style={styles.uploadBtn}>Upload</button>
+            </div>
+            
+            {message && <div style={message.includes('Success') ? styles.msgSuccess : styles.msgError}>{message}</div>}
+          </div>
         </div>
 
       </div>
     </div>
   );
+};
+
+// --- Modern "Vanna" Style System ---
+const styles: { [key: string]: React.CSSProperties } = {
+  pageContainer: {
+    minHeight: '100vh',
+    background: '#f3f4f6', // Light gray background
+    fontFamily: "'Inter', sans-serif",
+    color: '#1f2937',
+  },
+  loading: {
+    display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh', color: '#666'
+  },
+  
+  // Navbar
+  navbar: {
+    background: '#ffffff',
+    borderBottom: '1px solid #e5e7eb',
+    padding: '0.8rem 2rem',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    position: 'sticky',
+    top: 0,
+    zIndex: 100,
+    boxShadow: '0 1px 2px rgba(0,0,0,0.03)',
+  },
+  navLogo: {
+    fontSize: '1.25rem', fontWeight: '700', color: '#111827', display: 'flex', alignItems: 'center', gap: '8px'
+  },
+  logoIcon: { fontSize: '1.5rem' },
+  navUser: { display: 'flex', alignItems: 'center', gap: '15px' },
+  userName: { fontSize: '0.9rem', fontWeight: '500', color: '#374151' },
+  logoutBtn: {
+    padding: '6px 12px',
+    fontSize: '0.85rem',
+    color: '#ef4444',
+    background: 'transparent',
+    border: '1px solid #fecaca',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    transition: 'all 0.2s',
+  },
+
+  // Main Layout
+  mainContent: {
+    maxWidth: '1000px',
+    margin: '0 auto',
+    padding: '2rem',
+  },
+
+  // Hero / Query Section
+  heroSection: {
+    marginBottom: '2rem',
+    textAlign: 'center',
+  },
+  heroTitle: {
+    fontSize: '2rem', fontWeight: '800', color: '#111827', marginBottom: '0.5rem', letterSpacing: '-0.5px'
+  },
+  heroSubtitle: { color: '#6b7280', fontSize: '1rem', marginBottom: '2rem' },
+  
+  queryBox: {
+    background: '#ffffff',
+    padding: '1.5rem',
+    borderRadius: '16px',
+    boxShadow: '0 4px 20px rgba(0,0,0,0.08)',
+    border: '1px solid rgba(0,0,0,0.05)',
+  },
+  queryInput: {
+    width: '100%',
+    minHeight: '100px',
+    padding: '1rem',
+    fontSize: '1rem',
+    borderRadius: '12px',
+    border: '1px solid #e5e7eb',
+    background: '#f9fafb',
+    outline: 'none',
+    fontFamily: 'inherit',
+    resize: 'vertical',
+    marginBottom: '1rem',
+  },
+  queryActions: {
+    display: 'flex', justifyContent: 'flex-end', gap: '10px'
+  },
+  runBtn: {
+    padding: '10px 24px',
+    background: '#000000', // Vanna black
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    fontSize: '0.95rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+    boxShadow: '0 2px 5px rgba(0,0,0,0.2)',
+  },
+  runBtnDisabled: {
+    padding: '10px 24px',
+    background: '#9ca3af',
+    color: '#ffffff',
+    border: 'none',
+    borderRadius: '8px',
+    cursor: 'not-allowed',
+  },
+  clearBtn: {
+    padding: '10px 20px',
+    background: 'transparent',
+    color: '#6b7280',
+    border: '1px solid #e5e7eb',
+    borderRadius: '8px',
+    cursor: 'pointer',
+    fontWeight: '500',
+  },
+
+  // Results Section
+  resultsContainer: {
+    display: 'flex', flexDirection: 'column', gap: '1.5rem', marginBottom: '3rem'
+  },
+  
+  // Summary Card
+  summaryCard: {
+    background: '#f0f9ff', // Light blue tint
+    border: '1px solid #bae6fd',
+    borderRadius: '12px',
+    padding: '1.5rem',
+  },
+  summaryText: { fontSize: '1rem', lineHeight: '1.6', color: '#0c4a6e' },
+
+  // SQL Code Card (Dark Mode)
+  codeCard: {
+    background: '#1e293b', // Slate 800
+    borderRadius: '12px',
+    overflow: 'hidden',
+    boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+  },
+  cardHeaderCode: {
+    background: '#0f172a', // Slate 900
+    color: '#cbd5e1',
+    padding: '10px 20px',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderBottom: '1px solid #334155',
+  },
+  langTag: {
+    fontSize: '0.7rem',
+    background: '#334155',
+    padding: '2px 6px',
+    borderRadius: '4px',
+    color: '#94a3b8',
+  },
+  codeBlock: {
+    padding: '20px',
+    color: '#e2e8f0', // Light code text
+    fontFamily: "'Fira Code', 'Consolas', monospace",
+    fontSize: '0.9rem',
+    margin: 0,
+    whiteSpace: 'pre-wrap',
+    overflowX: 'auto',
+  },
+
+  // Table Card
+  tableCard: {
+    background: 'white',
+    borderRadius: '12px',
+    border: '1px solid #e5e7eb',
+    overflow: 'hidden',
+    boxShadow: '0 2px 4px rgba(0,0,0,0.05)',
+  },
+  cardHeader: {
+    padding: '15px 20px',
+    background: 'white',
+    borderBottom: '1px solid #e5e7eb',
+    fontSize: '1rem',
+    fontWeight: '700',
+    color: '#111827',
+  },
+  tableWrapper: {
+    overflowX: 'auto',
+  },
+  table: {
+    width: '100%',
+    borderCollapse: 'collapse',
+    fontSize: '0.9rem',
+  },
+  th: {
+    textAlign: 'left',
+    padding: '12px 20px',
+    background: '#f9fafb',
+    color: '#374151',
+    fontWeight: '600',
+    borderBottom: '1px solid #e5e7eb',
+    whiteSpace: 'nowrap',
+  },
+  td: {
+    padding: '12px 20px',
+    borderBottom: '1px solid #f3f4f6',
+    color: '#4b5563',
+  },
+  trEven: { background: '#ffffff' },
+  trOdd: { background: '#f9fafb' },
+
+  // Upload Section
+  uploadSection: {
+    marginTop: '2rem',
+  },
+  uploadCard: {
+    background: 'white',
+    padding: '1.5rem',
+    borderRadius: '12px',
+    border: '2px dashed #e5e7eb',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    flexWrap: 'wrap',
+    gap: '1rem',
+  },
+  uploadHeader: { flex: 1 },
+  uploadControls: {
+    display: 'flex', gap: '10px', alignItems: 'center'
+  },
+  fileLabel: {
+    padding: '8px 16px',
+    background: '#f3f4f6',
+    border: '1px solid #d1d5db',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontSize: '0.9rem',
+    color: '#374151',
+    fontWeight: '500',
+  },
+  uploadBtn: {
+    padding: '8px 20px',
+    background: '#10b981', // Emerald Green
+    color: 'white',
+    border: 'none',
+    borderRadius: '6px',
+    cursor: 'pointer',
+    fontWeight: '600',
+    fontSize: '0.9rem',
+  },
+  msgSuccess: {
+    width: '100%', marginTop: '10px', padding: '10px', background: '#ecfdf5', color: '#047857', borderRadius: '6px', fontSize: '0.9rem', border: '1px solid #a7f3d0'
+  },
+  msgError: {
+    width: '100%', marginTop: '10px', padding: '10px', background: '#fef2f2', color: '#b91c1c', borderRadius: '6px', fontSize: '0.9rem', border: '1px solid #fecaca'
+  }
 };
 
 export default Dashboard;
