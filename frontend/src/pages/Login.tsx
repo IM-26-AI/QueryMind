@@ -89,7 +89,7 @@ const Login = () => {
 
           {/* Developers Section (Subtle Footer) */}
           <div style={styles.devFooter}>
-            <p>Built by <strong>Mohsin Moiz Ali</strong> & <strong>Ilham Shaikh</strong></p>
+           
           </div>
         </div>
       </div>
